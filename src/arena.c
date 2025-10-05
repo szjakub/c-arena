@@ -20,8 +20,8 @@
  * SOFTWARE.
 */
 
-
 #include "arena.h"
+#include <stdio.h>
 
 static Region *arena_new_region(size_t capacity)
 {
@@ -33,42 +33,16 @@ static Region *arena_new_region(size_t capacity)
     return region;
 }
 
-/* round up an offset to the next multiple of the alignment */
-size_t arena_alignup(size_t region_size, size_t alignment)
+int arena_init(Arena *arena)
 {
-    assert(alignment > 0);
-    return (region_size + alignment - 1) / alignment * alignment;
-}
+    Region *new_region = arena_new_region(ARENA_DEFAULT_REGION_SIZE);
+    if (new_region == NULL) return -1;
 
-void arena_init(Arena *arena)
-{
     arena->start = arena->end = arena_new_region(ARENA_DEFAULT_REGION_SIZE);
+    return 0;
 }
 
-void *_arena_malloc(Arena *arena, size_t alignment, size_t size)
-{
-    Region *current_region = arena->start;
-    while (current_region)
-    {
-        size_t offset = arena_alignup(current_region->size, alignment);
-        if (current_region->capacity >= offset + size)
-        {
-            current_region->size = offset + size;
-            /* ensure pointer arithmetic is byte-wise */
-            return (void *)((char *)current_region->data + offset);
-        }
-        current_region = current_region->next;
-    }
-    Region *new_region = arena_new_region(MAX(size, ARENA_DEFAULT_REGION_SIZE));
-    if (new_region == NULL) return NULL;
-
-    arena->end->next = new_region;
-    arena->end = new_region;
-    new_region->size = size;
-    return (void *)(new_region->data);
-}
-
-void arena_free(Arena *arena)
+void arena_deinit(Arena *arena)
 {
     Region *region = arena->start;
     while (region != NULL)
@@ -78,3 +52,39 @@ void arena_free(Arena *arena)
         free(tmp);
     }
 }
+
+/* round up the size to the next multiple of the default alignment */
+size_t arena_alignup(size_t size)
+{
+    size_t alignment = _ARENA_ALIGNOF(arena_max_align_t);
+    printf("%zu\n", alignment);
+    assert(alignment > 0);
+    return ((size + alignment - 1) / alignment) * alignment;
+}
+
+void *arena_alloc(Arena *arena, size_t alloc_size)
+{
+    Region *current_region = arena->start;
+    size_t space_required = arena_alignup(alloc_size);
+
+    while (current_region)
+    {
+        size_t size_after_allocation = current_region->size + space_required;
+        if (current_region->capacity >= size_after_allocation)
+        {
+            /* ensure pointer arithmetic is byte-wise */
+            void *ptr = (void *)((char *)current_region->data + current_region->size);
+            current_region->size = size_after_allocation;
+            return ptr;
+        }
+        current_region = current_region->next;
+    }
+    Region *new_region = arena_new_region(MAX(space_required, ARENA_DEFAULT_REGION_SIZE));
+    if (new_region == NULL) return NULL;
+
+    arena->end->next = new_region;
+    arena->end = new_region;
+    new_region->size = space_required;
+    return (void *)(new_region->data);
+}
+
