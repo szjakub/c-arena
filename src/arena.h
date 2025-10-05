@@ -30,20 +30,15 @@
 
 #define ARENA_DEFAULT_REGION_SIZE (1024*8)
 
-#define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#ifndef MAX
+    #define MAX(a,b) (((a) > (b)) ? (a) : (b))
+#endif
 
-/* determine the alignment required for a given type */
-#define alignof(type) ((size_t)offsetof(struct {char c; type t;}, t))
+#define ARENA_ALIGNOF(type) ((size_t)offsetof(struct {char c; type t;}, t))
 
-/* round up an offset to the next multiple of the given type's alignment */
-/* #define alignup(offset, type) (((size_t)(offset) + alignof(type) - 1) / alignof(type) * alignof(type)) */
-
-/*
- * TODO: maybe add some macro magic for different platforms?
- * https://www.gnu.org/software/c-intro-and-ref/manual/html_node/Type-Alignment.html
-*/
-
-#define arena_malloc(arena, type, nmembers) _arena_malloc(arena, alignof(type), sizeof(type) * nmembers)
+#ifndef ARENA_DEFAULT_ALIGNMENT
+    #define ARENA_DEFAULT_ALIGNMENT ARENA_ALIGNOF(arena_max_align_t)
+#endif
 
 typedef union {
     long long   ll;
@@ -65,10 +60,17 @@ typedef struct {
     Region *start, *end;
 } Arena;
 
-void arena_init(Arena *arena);
-void *_arena_malloc(Arena *arena, size_t alignment, size_t size);
-void arena_free(Arena *arena);
 
-static Region *arena_new_region(size_t size);
+/* init arena with default capacity and allocate first region */
+int  arena_init(Arena *arena);
+
+/* free all allocated regions; does not free the Arena struct itself */
+void arena_deinit(Arena *arena);
+
+/* allocate memory with default alignment */
+void *arena_alloc(Arena *arena, size_t size);
+
+/* allocate memory with specified alignment  */
+void *arena_alloc_aligned(Arena *arena, size_t size, size_t alignment);
 
 #endif

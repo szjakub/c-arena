@@ -20,7 +20,6 @@
  * SOFTWARE.
 */
 
-
 #include "arena.h"
 
 static Region *arena_new_region(size_t capacity)
@@ -33,19 +32,39 @@ static Region *arena_new_region(size_t capacity)
     return region;
 }
 
+int arena_init(Arena *arena)
+{
+    Region *new_region = arena_new_region(ARENA_DEFAULT_REGION_SIZE);
+    if (new_region == NULL) return -1;
+
+    arena->start = arena->end = arena_new_region(ARENA_DEFAULT_REGION_SIZE);
+    return 0;
+}
+
+void arena_deinit(Arena *arena)
+{
+    Region *region = arena->start;
+    while (region != NULL)
+    {
+        Region *tmp = region;
+        region = region->next;
+        free(tmp);
+    }
+}
+
 /* round up an offset to the next multiple of the alignment */
-size_t arena_alignup(size_t region_size, size_t alignment)
+size_t arena_alignup(size_t size, size_t alignment)
 {
     assert(alignment > 0);
-    return (region_size + alignment - 1) / alignment * alignment;
+    return ((size + alignment - 1) / alignment) * alignment;
 }
 
-void arena_init(Arena *arena)
+void *arena_alloc(Arena *arena, size_t size)
 {
-    arena->start = arena->end = arena_new_region(ARENA_DEFAULT_REGION_SIZE);
+    return arena_alloc_aligned(arena, size, ARENA_DEFAULT_ALIGNMENT);
 }
 
-void *_arena_malloc(Arena *arena, size_t alignment, size_t size)
+void *arena_alloc_aligned(Arena *arena, size_t size, size_t alignment)
 {
     Region *current_region = arena->start;
     while (current_region)
@@ -66,15 +85,4 @@ void *_arena_malloc(Arena *arena, size_t alignment, size_t size)
     arena->end = new_region;
     new_region->size = size;
     return (void *)(new_region->data);
-}
-
-void arena_free(Arena *arena)
-{
-    Region *region = arena->start;
-    while (region != NULL)
-    {
-        Region *tmp = region;
-        region = region->next;
-        free(tmp);
-    }
 }
